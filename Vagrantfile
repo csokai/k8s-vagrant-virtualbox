@@ -7,10 +7,10 @@ Vagrant.configure("2") do |config|
       vb.memory = 2048
       vb.cpus = 2
     end
-    master.vm.box = "ubuntu/bionic64"
+    master.vm.box = "ubuntu/focal64"
     master.disksize.size = "25GB"
     master.vm.hostname = "master"
-    master.vm.network :private_network, ip: "10.0.0.10"
+    master.vm.network :private_network, ip: "192.168.50.10"
     master.vm.provision :shell, privileged: false, inline: $provision_master_node
   end
 
@@ -21,13 +21,13 @@ Vagrant.configure("2") do |config|
         vb.memory = 2048
         vb.cpus = 2
       end
-      node.vm.box = "ubuntu/bionic64"
+      node.vm.box = "ubuntu/focal64"
       node.disksize.size = "25GB"
       node.vm.hostname = name
-      node.vm.network :private_network, ip: "10.0.0.#{i + 11}"
+      node.vm.network :private_network, ip: "192.168.50.#{i + 11}"
       node.vm.provision :shell, privileged: false, inline: <<-SHELL
 sudo /vagrant/join.sh
-echo 'Environment="KUBELET_EXTRA_ARGS=--node-ip=10.0.0.#{i + 11}"' | sudo tee -a /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+echo 'Environment="KUBELET_EXTRA_ARGS=--node-ip=192.168.50.#{i + 11}"' | sudo tee -a /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 cat /vagrant/id_rsa.pub >> /home/vagrant/.ssh/authorized_keys
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
@@ -59,10 +59,10 @@ sed -e '/^.*ubuntu-bionic.*/d' -i /etc/hosts
 apt-get update && apt-get upgrade -y
 
 # Create local host entries
-echo "10.0.0.10 master" >> /etc/hosts
-echo "10.0.0.11 node1" >> /etc/hosts
-echo "10.0.0.12 node2" >> /etc/hosts
-echo "10.0.0.13 node3" >> /etc/hosts
+echo "192.168.50.10    master" >> /etc/hosts
+echo "192.168.50.11    node1" >> /etc/hosts
+echo "192.168.50.12    node2" >> /etc/hosts
+echo "192.168.50.13    node3" >> /etc/hosts
 
 # disable swap
 swapoff -a
@@ -97,8 +97,9 @@ ssh-keygen -q -t rsa -b 4096 -N '' -f /home/vagrant/.ssh/id_rsa
 cat /home/vagrant/.ssh/id_rsa.pub >> /home/vagrant/.ssh/authorized_keys
 cat /home/vagrant/.ssh/id_rsa.pub > ${KEY_FILE}
 
+
 # Start cluster
-sudo kubeadm init --apiserver-advertise-address=10.0.0.10 --pod-network-cidr=10.244.0.0/16 | grep -Ei "kubeadm join|discovery-token-ca-cert-hash" > ${OUTPUT_FILE}
+sudo kubeadm init --apiserver-advertise-address=192.168.50.10 --pod-network-cidr=192.168.0.0/16 | grep -Ei "kubeadm join|discovery-token-ca-cert-hash" > ${OUTPUT_FILE}
 chmod +x $OUTPUT_FILE
 
 # Configure kubectl for vagrant and root users
@@ -110,14 +111,26 @@ sudo cp -i /etc/kubernetes/admin.conf /root/.kube/config
 sudo chown -R root:root /root/.kube
 
 # Fix kubelet IP
-echo 'Environment="KUBELET_EXTRA_ARGS=--node-ip=10.0.0.10"' | sudo tee -a /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+echo 'Environment="KUBELET_EXTRA_ARGS=--node-ip=192.168.50.10"' | sudo tee -a /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+
+#fix controller & scheduler port
+sudo sed -i -e 's/- --port=0//g' /etc/kubernetes/manifests/kube-controller-manager.yaml
+sudo sed -i '/^[[:space:]]*$/d' /etc/kubernetes/manifests/kube-controller-manager.yaml
+sudo sed -i -e 's/- --port=0//g' /etc/kubernetes/manifests/kube-scheduler.yaml
+sudo sed -i '/^[[:space:]]*$/d' /etc/kubernetes/manifests/kube-scheduler.yaml
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet.service
+
 
 # Use our flannel config file so that routing will work properly
-kubectl create -f /vagrant/kube-flannel.yml
+#kubectl create -f /vagrant/kube-flannel.yml
+#Use calico instead of flannel
+kubectl create -f /vagrant/calico.yaml
 
 # Set alias on master for vagrant and root users
 echo "alias k=/usr/bin/kubectl" >> $HOME/.bash_profile
-sudo echo "alias k=/usr/bin/kubectl" >> /root/.bash_profile
+
+
 
 # Install the etcd client
 sudo apt install etcd-client

@@ -6,7 +6,12 @@ The vagrant file will do the following:
 2.  Patch the OS
 3.  Install Docker
 4.  Install k8s control plane
-5.  Initialize cluster with Flannel CIDR block & install Flannel
+5.  Initialize cluster with Flannel CIDR block & install Flannel or Calico just comment out and edit calico.yaml if necessary:
+    Change this to your needs:
+      - name: CALICO_IPV4POOL_CIDR
+        value: "192.168.0.0/16"
+    Change Vagrantfile also  in line 102 kuebadmin init parameter at #Start cluster:
+    --pod-network-cidr=192.168.0.0/16
 6.  Join the nodes to the master
 7.  Create and copy the SSH key to all machines so you can SSH to any node from the Master.  Add names & IPs to the local hosts file on each master and node.  Create alias in vagrant home for kubectl...just use k
 8.  Make required Ubuntu OS mods for the cluster to function properly
@@ -27,7 +32,7 @@ Instal [git](https://git-scm.com/downloads) if you don't already have it.
 ## Open a shell and clone
 
 ```bash
-$ git clone https://github.com/LocusInnovations/k8s-vagrant-virtualbox
+$ git clone https://github.com/csokai/k8s-vagrant-virtualbox.git
 $ cd k8s-vagrant-virtualbox
 ```
 
@@ -75,4 +80,18 @@ SSH to other Nodes in the cluster from the Master:
 $ ssh node1
 $ ssh node2
 $ ssh node3
+```
+When needed you can label the worker nodes from master:
+
+```bash
+# label up worker nodes
+kubectl label node node{1..3} node-role.kubernetes.io/worker=worker
+
+kubectl get nodes
+NAME     STATUS   ROLES                  AGE   VERSION
+master   Ready    control-plane,master   19m   v1.21.2
+node1    Ready    worker                 16m   v1.21.2
+node2    Ready    worker                 13m   v1.21.2
+node3    Ready    worker                 10m   v1.21.2
+
 ```
